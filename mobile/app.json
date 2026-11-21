@@ -1,0 +1,56 @@
+{
+  "expo": {
+    "name": "Capdit Studio",
+    "slug": "capdit-studio",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.capdit.studio"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#07080c",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "com.capdit.studio",
+      "versionCode": 1
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sharing",
+      "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Capdit needs access to your photos and videos so you can edit them locally.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Capdit needs access to your media library.",
+          "savePhotosPermission": "Capdit saves your finished photos and videos to your gallery."
+        }
+      ],
+      [
+        "@wekor/ffmpeg-kit-react-native",
+        {
+          "package": "video"
+        }
+      ],
+      "expo-system-ui"
+    ],
+    "scheme": "capdit",
+    "backgroundColor": "#07080c"
+  }
+}

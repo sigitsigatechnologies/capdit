@@ -1,0 +1,131 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-panel-raised: var(--panel-raised);
+  --color-border-subtle: var(--border-subtle);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-accent-3: var(--accent-3);
+  --radius-xl2: 1.15rem;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+:root {
+  --background: #0a0b0f;
+  --foreground: #f2f4f8;
+  --panel: #101219;
+  --panel-raised: #161923;
+  --border-subtle: rgba(255, 255, 255, 0.075);
+  --muted: #8b93a7;
+  --accent: #8b5cf6;
+  --accent-2: #3b82f6;
+  --accent-3: #22d3ee;
+}
+
+* {
+  border-color: var(--border-subtle);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 700px at 85% -10%, rgba(59, 130, 246, 0.09), transparent 60%),
+    radial-gradient(900px 600px at 5% 0%, rgba(139, 92, 246, 0.08), transparent 55%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.35);
+}
+
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass {
+  background: rgba(18, 21, 30, 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.gradient-text {
+  background: linear-gradient(100deg, #c4b5fd 0%, #93c5fd 45%, #67e8f9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.gradient-accent {
+  background-image: linear-gradient(110deg, #7c3aed 0%, #4f46e5 50%, #0ea5e9 100%);
+}
+
+.checkerboard {
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.06) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.06) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.06) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+}
+
+.no-drag {
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.animate-pulse-soft {
+  animation: pulse-soft 2.4s ease-in-out infinite;
+}
+
+@keyframes float-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-float-in {
+  animation: float-in 0.35s ease-out both;
+}
