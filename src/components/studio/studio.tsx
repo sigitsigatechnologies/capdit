@@ -212,6 +212,75 @@ function ExportPanel({
   );
 }
 
+function PhotoPresetPanel({
+  adjust,
+  sourceName,
+  onNameChange,
+  onDownload,
+  onImport,
+  disabled,
+}: {
+  adjust: Adjustments;
+  sourceName: string;
+  onNameChange: (value: string) => void;
+  onDownload: () => void;
+  onImport: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="surface rounded-2xl p-4">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-primary">
+          Preset from photo
+        </h3>
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+          generated
+        </span>
+      </div>
+      <Input
+        value={sourceName}
+        onChange={(event) => onNameChange(event.target.value)}
+        className="mt-3"
+        placeholder="my-preset"
+        aria-label="Preset name"
+      />
+      <p className="mt-2 text-[11px] text-muted-foreground">{summarizeAdjustments(adjust)}</p>
+      <div className="mt-3 grid grid-cols-2 gap-1.5">
+        {FIELDS.map((field) => {
+          const range = LIGHTROOM_RANGES[field.key];
+          return (
+            <div
+              key={field.key}
+              className="flex items-center justify-between gap-2 rounded-lg bg-secondary px-2 py-1"
+            >
+              <span className="text-[10px] text-muted-foreground">{field.label}</span>
+              <span className="text-[11px] font-medium tabular-nums">
+                {formatValue(adjust[field.key], range.step)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <Button
+        type="button"
+        className="mt-4 w-full"
+        size="lg"
+        onClick={onDownload}
+        disabled={disabled}
+        data-testid="download-xmp"
+      >
+        <Download className="size-4" /> Download .xmp
+      </Button>
+      <Button type="button" variant="secondary" size="sm" className="mt-2 w-full" onClick={onImport}>
+        <CloudUpload className="size-3.5" /> Import .xmp
+      </Button>
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+        Lightroom Mobile → Edit → Presets → Yours → ⋯ → Import Presets → pick the .xmp file.
+      </p>
+    </div>
+  );
+}
+
 function StyleBanner({ adjust }: { adjust: Adjustments }) {
   const warm = adjust.temperature >= 0;
   const gradient = warm
@@ -571,14 +640,15 @@ export function Studio() {
                       onReplace={() => photoInputRef.current?.click()}
                       onRemove={handleRemove}
                     />
-                    <DetectedPanel stats={stats} />
-                    <ExportPanel
+                    <PhotoPresetPanel
+                      adjust={adjust}
                       sourceName={sourceName}
                       onNameChange={setSourceName}
                       onDownload={handleDownload}
                       onImport={() => importInputRef.current?.click()}
                       disabled={busy}
                     />
+                    <DetectedPanel stats={stats} />
                   </aside>
                 </div>
               ) : (

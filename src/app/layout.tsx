@@ -8,9 +8,13 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "CAPDIT — Photo to Lightroom Preset",
+  applicationName: "LUMA CAPDIT Studio Presets",
+  title: {
+    default: "LUMA CAPDIT Studio Presets",
+    template: "%s · LUMA CAPDIT Studio Presets",
+  },
   description:
-    "Upload a photograph, measure its brightness and color in the browser, and download a Lightroom XMP preset tuned to that photo.",
+    "Analyze your photo, pick a film simulation, and download a real, validated Lightroom XMP preset tuned to that image.",
 };
 
 export default function RootLayout({
@@ -30,10 +34,10 @@ export default function RootLayout({
             toastOptions={{
               style: {
                 background: "#ffffff",
-                border: "1px solid rgba(17,17,20,0.08)",
-                color: "#111114",
+                border: "1px solid rgba(13,13,13,0.09)",
+                color: "#0d0d0d",
                 borderRadius: "14px",
-                boxShadow: "0 12px 32px -12px rgba(17,17,20,0.25)",
+                boxShadow: "0 16px 40px -20px rgba(13,13,13,0.28)",
               },
             }}
           />

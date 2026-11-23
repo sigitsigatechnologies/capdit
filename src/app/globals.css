@@ -28,26 +28,26 @@
 }
 
 :root {
-  --background: #f6f6f4;
-  --foreground: #111114;
+  --background: #f6f6f3;
+  --foreground: #0d0d0d;
   --card: #ffffff;
-  --card-foreground: #111114;
+  --card-foreground: #0d0d0d;
   --popover: #ffffff;
-  --popover-foreground: #111114;
-  --primary: #5b5bd6;
-  --primary-foreground: #ffffff;
-  --secondary: #f0f0f3;
-  --secondary-foreground: #2a2a31;
-  --muted: #6b6b76;
-  --muted-foreground: #6b6b76;
-  --accent: #ecebff;
-  --accent-foreground: #4f46e5;
-  --destructive: #e5484d;
+  --popover-foreground: #0d0d0d;
+  --primary: #0d0d0d;
+  --primary-foreground: #fafaf8;
+  --secondary: #eeeeea;
+  --secondary-foreground: #1a1a18;
+  --muted: #6f6f69;
+  --muted-foreground: #6f6f69;
+  --accent: #e9e9e3;
+  --accent-foreground: #0d0d0d;
+  --destructive: #d9483f;
   --destructive-foreground: #ffffff;
-  --border: rgba(17, 17, 20, 0.08);
-  --input: rgba(17, 17, 20, 0.12);
-  --ring: #5b5bd6;
-  --radius: 1rem;
+  --border: rgba(13, 13, 13, 0.09);
+  --input: rgba(13, 13, 13, 0.14);
+  --ring: rgba(13, 13, 13, 0.5);
+  --radius: 1.1rem;
 }
 
 * {
@@ -61,8 +61,7 @@ body {
 
 body {
   background:
-    radial-gradient(900px 520px at 10% -10%, rgba(91, 91, 214, 0.1), transparent 60%),
-    radial-gradient(820px 520px at 95% -8%, rgba(34, 211, 238, 0.1), transparent 55%),
+    radial-gradient(900px 480px at 50% -18%, rgba(255, 255, 255, 0.9), transparent 62%),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -71,7 +70,8 @@ body {
 }
 
 ::selection {
-  background: rgba(91, 91, 214, 0.2);
+  background: rgba(13, 13, 13, 0.12);
+  color: #0d0d0d;
 }
 
 @layer base {
@@ -80,20 +80,20 @@ body {
   h3,
   h4 {
     font-weight: 600;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.035em;
   }
 }
 
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgba(17, 17, 20, 0.18) transparent;
+  scrollbar-color: rgba(13, 13, 13, 0.18) transparent;
 }
 .scrollbar-thin::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(17, 17, 20, 0.15);
+  background: rgba(13, 13, 13, 0.14);
   border-radius: 9999px;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
@@ -104,8 +104,8 @@ body {
   background: var(--card);
   border: 1px solid var(--border);
   box-shadow:
-    0 1px 2px rgba(17, 17, 20, 0.04),
-    0 18px 40px -26px rgba(17, 17, 20, 0.35);
+    0 1px 2px rgba(13, 13, 13, 0.03),
+    0 18px 40px -30px rgba(13, 13, 13, 0.18);
 }
 
 .glass {
@@ -115,7 +115,7 @@ body {
 }
 
 .gradient-text {
-  background: linear-gradient(100deg, #5b5bd6 0%, #7c3aed 50%, #22d3ee 100%);
+  background: linear-gradient(100deg, #0d0d0d 0%, #3a3a36 50%, #8a8a83 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -123,10 +123,10 @@ body {
 
 .checkerboard {
   background-image:
-    linear-gradient(45deg, rgba(17, 17, 20, 0.05) 25%, transparent 25%),
-    linear-gradient(-45deg, rgba(17, 17, 20, 0.05) 25%, transparent 25%),
-    linear-gradient(45deg, transparent 75%, rgba(17, 17, 20, 0.05) 75%),
-    linear-gradient(-45deg, transparent 75%, rgba(17, 17, 20, 0.05) 75%);
+    linear-gradient(45deg, rgba(13, 13, 13, 0.05) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(13, 13, 13, 0.05) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(13, 13, 13, 0.05) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(13, 13, 13, 0.05) 75%);
   background-size: 16px 16px;
   background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
@@ -143,7 +143,7 @@ input[type="range"] {
 @keyframes pulse-soft {
   0%,
   100% {
-    opacity: 0.65;
+    opacity: 0.6;
   }
   50% {
     opacity: 1;
@@ -156,7 +156,7 @@ input[type="range"] {
 @keyframes float-in {
   from {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -164,7 +164,7 @@ input[type="range"] {
   }
 }
 .animate-float-in {
-  animation: float-in 0.35s ease-out both;
+  animation: float-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes shimmer {
@@ -176,14 +176,14 @@ input[type="range"] {
   }
 }
 .animate-shimmer {
-  background: linear-gradient(90deg, rgba(17, 17, 20, 0.04) 25%, rgba(17, 17, 20, 0.08) 50%, rgba(17, 17, 20, 0.04) 75%);
+  background: linear-gradient(90deg, rgba(13, 13, 13, 0.03) 25%, rgba(13, 13, 13, 0.06) 50%, rgba(13, 13, 13, 0.03) 75%);
   background-size: 800px 100%;
   animation: shimmer 1.6s linear infinite;
 }
 
 [data-radix-slider-track] {
   height: 6px;
-  background: rgba(17, 17, 20, 0.08);
+  background: rgba(13, 13, 13, 0.09);
 }
 
 [data-radix-slider-range] {
@@ -196,5 +196,5 @@ input[type="range"] {
   border-radius: 9999px;
   background: #ffffff;
   border: 2px solid var(--primary);
-  box-shadow: 0 0 0 4px rgba(91, 91, 214, 0.14);
+  box-shadow: 0 0 0 4px rgba(13, 13, 13, 0.07);
 }

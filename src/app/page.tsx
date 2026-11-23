@@ -1,5 +1,5 @@
-import { Studio } from "@/components/studio/studio";
+import { SimpleStudio } from "@/components/luma/simple-studio";
 
 export default function HomePage() {
-  return <Studio />;
+  return <SimpleStudio />;
 }
