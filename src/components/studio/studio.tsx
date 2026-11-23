@@ -17,33 +17,33 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { analyzeImage, type ImageStats } from "@/lib/analyze-image";
 import { createUploadedImage } from "@/lib/image-info";
-import { generatePresetFromLook, LIGHTROOM_RANGES } from "@/lib/generation";
+import { generatePresetFromAdjustments } from "@/lib/generation";
 import { downloadXmp } from "@/lib/xmp";
-import { clamp, cn, formatBytes } from "@/lib/utils";
-import type { AnalysisResult, LightroomPreset, UploadedImage } from "@/lib/types";
+import { parseXmp } from "@/lib/xmp-import";
+import {
+  LIGHTROOM_RANGES,
+  adjustmentsFromLook,
+  clampAdjustments,
+  previewFilter,
+  summarizeAdjustments,
+  type Adjustments,
+} from "@/lib/adjustments";
+import { generateStyleAdjustments } from "@/lib/style-engine";
+import { cn, formatBytes } from "@/lib/utils";
+import type { UploadedImage } from "@/lib/types";
 
-const ACCEPTED = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
-
-type Adjustments = {
-  exposure: number;
-  contrast: number;
-  highlights: number;
-  shadows: number;
-  whites: number;
-  blacks: number;
-  temperature: number;
-  tint: number;
-  vibrance: number;
-  saturation: number;
-  clarity: number;
-  texture: number;
-  dehaze: number;
-  sharpening: number;
-  vignette: number;
-  grain: number;
-};
+const ACCEPTED_IMAGE = ".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp";
+const EXAMPLE_STYLES = [
+  "Teal & Orange Cinematic",
+  "Moody Film",
+  "Clean Portrait",
+  "Vintage Sunset",
+  "Neon Night",
+  "Airy Minimal",
+];
 
 type AdjustGroup = "Light" | "Color" | "Detail" | "Effects";
+const GROUPS: AdjustGroup[] = ["Light", "Color", "Detail", "Effects"];
 
 const FIELDS: Array<{ key: keyof Adjustments; label: string; group: AdjustGroup }> = [
   { key: "exposure", label: "Exposure", group: "Light" },
@@ -63,61 +63,6 @@ const FIELDS: Array<{ key: keyof Adjustments; label: string; group: AdjustGroup 
   { key: "vignette", label: "Vignette", group: "Effects" },
   { key: "grain", label: "Grain", group: "Effects" },
 ];
-
-const GROUPS: AdjustGroup[] = ["Light", "Color", "Detail", "Effects"];
-
-function adjustmentsFromPreset(preset: LightroomPreset): Adjustments {
-  return {
-    exposure: preset.basic.exposure,
-    contrast: preset.basic.contrast,
-    highlights: preset.basic.highlights,
-    shadows: preset.basic.shadows,
-    whites: preset.basic.whites,
-    blacks: preset.basic.blacks,
-    temperature: preset.basic.temperature,
-    tint: preset.basic.tint,
-    vibrance: preset.basic.vibrance,
-    saturation: preset.basic.saturation,
-    clarity: preset.basic.clarity,
-    texture: preset.basic.texture,
-    dehaze: preset.basic.dehaze,
-    sharpening: preset.detail.sharpening,
-    vignette: preset.effects.vignette,
-    grain: preset.effects.grain,
-  };
-}
-
-function applyAdjustments(preset: LightroomPreset, a: Adjustments): LightroomPreset {
-  return {
-    ...preset,
-    basic: {
-      ...preset.basic,
-      exposure: a.exposure,
-      contrast: a.contrast,
-      highlights: a.highlights,
-      shadows: a.shadows,
-      whites: a.whites,
-      blacks: a.blacks,
-      temperature: a.temperature,
-      tint: a.tint,
-      vibrance: a.vibrance,
-      saturation: a.saturation,
-      clarity: a.clarity,
-      texture: a.texture,
-      dehaze: a.dehaze,
-    },
-    detail: { ...preset.detail, sharpening: a.sharpening },
-    effects: { ...preset.effects, vignette: a.vignette, grain: a.grain },
-  };
-}
-
-function previewFilter(a: Adjustments): string {
-  const brightness = Math.pow(2, a.exposure).toFixed(3);
-  const contrast = (1 + (a.contrast / 100) * 0.8).toFixed(3);
-  const saturate = Math.max(0, 1 + a.saturation / 100).toFixed(3);
-  const sepia = ((clamp(a.temperature, 0, 100) / 100) * 0.25).toFixed(3);
-  return `brightness(${brightness}) contrast(${contrast}) saturate(${saturate}) sepia(${sepia})`;
-}
 
 function formatValue(value: number, step: number): string {
   return step < 1 ? value.toFixed(2) : String(Math.round(value));
@@ -167,18 +112,203 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
+function AdjustPanel({
+  adjust,
+  onChange,
+  onReset,
+}: {
+  adjust: Adjustments;
+  onChange: (key: keyof Adjustments, value: number) => void;
+  onReset: () => void;
+}) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-card/70 p-5 backdrop-blur">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Adjust</h2>
+        <Button type="button" variant="ghost" size="sm" onClick={onReset}>
+          Reset
+        </Button>
+      </div>
+      {GROUPS.map((group) => (
+        <div key={group} className="mt-5">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {group}
+          </p>
+          <div className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+            {FIELDS.filter((field) => field.group === group).map((field) => {
+              const range = LIGHTROOM_RANGES[field.key];
+              return (
+                <SliderRow
+                  key={field.key}
+                  label={field.label}
+                  value={adjust[field.key]}
+                  min={range.min}
+                  max={range.max}
+                  step={range.step}
+                  onChange={(next) => onChange(field.key, next)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ExportPanel({
+  sourceName,
+  onNameChange,
+  onDownload,
+  onImport,
+  disabled,
+}: {
+  sourceName: string;
+  onNameChange: (value: string) => void;
+  onDownload: () => void;
+  onImport: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-b from-orange-500/[0.08] to-transparent p-4">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-orange-300">
+        Export preset
+      </h3>
+      <label
+        htmlFor="preset-name"
+        className="mt-3 block text-[11px] uppercase tracking-wide text-muted-foreground"
+      >
+        Preset name
+      </label>
+      <Input
+        id="preset-name"
+        value={sourceName}
+        onChange={(event) => onNameChange(event.target.value)}
+        className="mt-1.5"
+        placeholder="my-preset"
+      />
+      <Button
+        type="button"
+        className="mt-4 w-full"
+        size="lg"
+        onClick={onDownload}
+        disabled={disabled}
+        data-testid="download-xmp"
+      >
+        <Download className="size-4" /> Download .xmp
+      </Button>
+      <Button type="button" variant="secondary" size="sm" className="mt-2 w-full" onClick={onImport}>
+        <CloudUpload className="size-3.5" /> Import .xmp
+      </Button>
+      <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
+        Lightroom Mobile → Edit → Presets → Yours → ⋯ → Import Presets → pick the .xmp file.
+      </p>
+    </div>
+  );
+}
+
+function StyleBanner({ adjust }: { adjust: Adjustments }) {
+  const warm = adjust.temperature >= 0;
+  const gradient = warm
+    ? "linear-gradient(120deg, #1b130c 0%, #7c4a1e 45%, #f4b06a 100%)"
+    : "linear-gradient(120deg, #0b1620 0%, #1e3a5c 45%, #7fb4e8 100%)";
+  return (
+    <div className="relative overflow-hidden rounded-3xl border border-white/10">
+      <div className="h-44" style={{ background: gradient }}>
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_45%)]" />
+      </div>
+      <div className="flex items-center justify-between gap-3 bg-card/70 px-4 py-3 backdrop-blur">
+        <p className="text-sm font-medium">{summarizeAdjustments(adjust)}</p>
+        <span className="text-[11px] text-muted-foreground">Style preset</span>
+      </div>
+    </div>
+  );
+}
+
+function FilePanel({
+  image,
+  onReplace,
+  onRemove,
+}: {
+  image: UploadedImage;
+  onReplace: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-card/70 p-4 backdrop-blur">
+      <div className="flex items-center gap-3">
+        <div className="size-12 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={image.previewUrl} alt="" className="size-full object-cover" />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium" title={image.name}>
+            {image.name}
+          </p>
+          <p className="text-[11px] text-muted-foreground">
+            {image.width && image.height ? `${image.width} × ${image.height}` : "—"} ·{" "}
+            {formatBytes(image.size)}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Button type="button" variant="secondary" size="sm" className="flex-1" onClick={onReplace}>
+          <RefreshCw className="size-3.5" /> Replace
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onRemove}>
+          <X className="size-3.5" /> Remove
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function DetectedPanel({ stats }: { stats: ImageStats }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-card/70 p-4 backdrop-blur">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        Detected
+      </h3>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Stat label="Brightness" value={`${stats.brightness}%`} />
+        <Stat label="Contrast" value={`${stats.contrast}%`} />
+        <Stat label="Saturation" value={`${stats.saturation}%`} />
+        <Stat label="Cast" value={stats.colorCast} />
+      </div>
+      <div className="mt-3 flex items-center gap-1.5">
+        {stats.dominantColors.map((color) => (
+          <span
+            key={color}
+            className="size-6 rounded-md border border-white/15"
+            style={{ backgroundColor: color }}
+            title={color}
+          />
+        ))}
+      </div>
+      <p className="mt-3 text-[11px] text-muted-foreground">{stats.lookSummary}</p>
+    </div>
+  );
+}
+
 export function Studio() {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const [mode, setMode] = useState<"photo" | "name">("photo");
   const [image, setImage] = useState<UploadedImage | null>(null);
-  const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [stats, setStats] = useState<ImageStats | null>(null);
-  const [preset, setPreset] = useState<LightroomPreset | null>(null);
   const [adjust, setAdjust] = useState<Adjustments | null>(null);
+  const [baseAdjust, setBaseAdjust] = useState<Adjustments | null>(null);
   const [sourceName, setSourceName] = useState("");
   const [view, setView] = useState<"before" | "after">("after");
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [styleText, setStyleText] = useState("");
+  const [styleBusy, setStyleBusy] = useState(false);
+
+  const photoReady = Boolean(image && stats && adjust);
+  const nameReady = Boolean(adjust);
 
   const handleFile = useCallback(async (file?: File) => {
     if (!file) return;
@@ -190,18 +320,18 @@ export function Studio() {
     setBusy(true);
     try {
       const uploaded = await createUploadedImage(file);
-      const { analysis: nextAnalysis, stats: nextStats, look } = await analyzeImage(uploaded);
-      const nextPreset = generatePresetFromLook(look, nextAnalysis, file.name);
+      const { stats: nextStats, look } = await analyzeImage(uploaded);
+      const nextAdjust = adjustmentsFromLook(look);
       setImage((prev) => {
         if (prev) URL.revokeObjectURL(prev.previewUrl);
         return uploaded;
       });
-      setAnalysis(nextAnalysis);
       setStats(nextStats);
-      setPreset(nextPreset);
-      setAdjust(adjustmentsFromPreset(nextPreset));
+      setAdjust(nextAdjust);
+      setBaseAdjust(nextAdjust);
       setSourceName(file.name.replace(/\.[^.]+$/, ""));
       setView("after");
+      setMode("photo");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Gagal membaca gambar.";
       setError(message);
@@ -216,29 +346,74 @@ export function Studio() {
       if (prev) URL.revokeObjectURL(prev.previewUrl);
       return null;
     });
-    setAnalysis(null);
     setStats(null);
-    setPreset(null);
     setAdjust(null);
+    setBaseAdjust(null);
     setSourceName("");
     setError(null);
   }, []);
 
+  const handleGenerateName = useCallback(
+    async (textOverride?: string) => {
+      const text = (textOverride ?? styleText).trim();
+      if (!text) return;
+      setStyleText(text);
+      setStyleBusy(true);
+      try {
+        let next: Adjustments;
+        try {
+          const response = await fetch("/api/style", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text }),
+          });
+          if (!response.ok) throw new Error("Style engine unavailable");
+          const data = await response.json();
+          next = clampAdjustments(data.adjust ?? {});
+        } catch {
+          next = generateStyleAdjustments(text).adjust;
+        }
+        setAdjust(next);
+        setBaseAdjust(next);
+        setSourceName(text);
+        setMode("name");
+        toast.success(`Preset dibuat: ${text}`);
+      } finally {
+        setStyleBusy(false);
+      }
+    },
+    [styleText]
+  );
+
   const handleDownload = useCallback(async () => {
-    if (!preset || !adjust) return;
+    if (!adjust) return;
     const cleanName = sourceName.trim() || "preset";
-    const finalPreset: LightroomPreset = {
-      ...applyAdjustments(preset, adjust),
-      sourceFileName: cleanName,
-      name: `CAPDIT - ${cleanName}`,
-    };
+    const preset = { ...generatePresetFromAdjustments(adjust, cleanName), name: `CAPDIT - ${cleanName}` };
     try {
-      await downloadXmp(finalPreset);
+      await downloadXmp(preset);
       toast.success("Preset .xmp berhasil diunduh");
     } catch {
       toast.error("Gagal mengunduh preset");
     }
-  }, [preset, adjust, sourceName]);
+  }, [adjust, sourceName]);
+
+  const handleImportFile = useCallback(
+    async (file?: File) => {
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const imported = parseXmp(text);
+        setAdjust(imported.adjust);
+        setBaseAdjust(imported.adjust);
+        setSourceName(imported.name);
+        if (!image) setMode("name");
+        toast.success(`Imported "${imported.name}"`);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "XMP tidak valid");
+      }
+    },
+    [image]
+  );
 
   const onDrop = (event: React.DragEvent) => {
     event.preventDefault();
@@ -251,7 +426,7 @@ export function Studio() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0c]/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-[#1c0f02]">
               <Aperture className="size-5" />
@@ -261,271 +436,281 @@ export function Studio() {
               <p className="text-[11px] text-muted-foreground">Photo to Lightroom preset</p>
             </div>
           </div>
-          <span className="hidden rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-muted-foreground sm:block">
-            On-device analysis · no AI, no upload
-          </span>
+          <div className="flex items-center gap-2">
+            <div className="flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+              {(["photo", "name"] as const).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setMode(item)}
+                  className={cn(
+                    "rounded-md px-3 py-1 text-xs font-medium transition",
+                    mode === item
+                      ? "bg-orange-500 text-[#1c0f02]"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {item === "photo" ? "From photo" : "From name"}
+                </button>
+              ))}
+            </div>
+            <span className="hidden rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-muted-foreground lg:block">
+              On-device analysis
+            </span>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pb-20 pt-8 sm:px-6">
         <input
-          ref={inputRef}
+          ref={photoInputRef}
           type="file"
-          accept={ACCEPTED}
+          accept={ACCEPTED_IMAGE}
           className="hidden"
           onChange={(event) => {
             void handleFile(event.target.files?.[0]);
             event.target.value = "";
           }}
         />
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".xmp,application/xml,text/xml"
+          className="hidden"
+          onChange={(event) => {
+            void handleImportFile(event.target.files?.[0]);
+            event.target.value = "";
+          }}
+        />
 
         <AnimatePresence mode="wait">
-          {!image || !preset || !adjust || !stats || !analysis ? (
-            <motion.section
-              key="empty"
+          {mode === "photo" ? (
+            <motion.div
+              key="photo"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
-              className="mx-auto max-w-3xl"
+            >
+              {photoReady && image && stats && adjust ? (
+                <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+                  <div className="space-y-6">
+                    <div className="overflow-hidden rounded-3xl border border-white/10 bg-card/70 backdrop-blur">
+                      <div className="flex items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
+                        <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                          <span className="size-1.5 shrink-0 rounded-full bg-emerald-400" />
+                          <span className="truncate">{image.name}</span>
+                        </div>
+                        <div className="flex shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+                          {(["before", "after"] as const).map((item) => (
+                            <button
+                              key={item}
+                              type="button"
+                              onClick={() => setView(item)}
+                              className={cn(
+                                "rounded-md px-3 py-1 text-xs font-medium capitalize transition",
+                                view === item
+                                  ? "bg-orange-500 text-[#1c0f02]"
+                                  : "text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              {item}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="checkerboard relative flex min-h-[280px] items-center justify-center p-3">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={image.previewUrl}
+                          alt={view === "before" ? "Before" : "After"}
+                          className="max-h-[520px] w-full object-contain transition-[filter] duration-300"
+                          style={{ filter: view === "after" ? afterFilter : "none" }}
+                        />
+                        {busy ? (
+                          <div className="absolute inset-0 grid place-items-center bg-black/40 backdrop-blur-sm">
+                            <Loader2 className="size-8 animate-spin text-orange-400" />
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <AdjustPanel
+                      adjust={adjust}
+                      onChange={(key, value) =>
+                        setAdjust((prev) => (prev ? { ...prev, [key]: value } : prev))
+                      }
+                      onReset={() => baseAdjust && setAdjust(baseAdjust)}
+                    />
+                  </div>
+
+                  <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+                    <FilePanel
+                      image={image}
+                      onReplace={() => photoInputRef.current?.click()}
+                      onRemove={handleRemove}
+                    />
+                    <DetectedPanel stats={stats} />
+                    <ExportPanel
+                      sourceName={sourceName}
+                      onNameChange={setSourceName}
+                      onDownload={handleDownload}
+                      onImport={() => importInputRef.current?.click()}
+                      disabled={busy}
+                    />
+                  </aside>
+                </div>
+              ) : (
+                <section className="mx-auto max-w-3xl">
+                  <div className="text-center">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[11px] font-medium text-orange-300">
+                      <Sparkles className="size-3.5" /> Reads brightness &amp; color from the pixels
+                    </span>
+                    <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
+                      Photo in. <span className="gradient-text">Preset out.</span>
+                    </h1>
+                    <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground">
+                      Drop a photo and CAPDIT measures exposure, contrast and color right in your
+                      browser, then builds a matching Lightroom <span className="font-mono">.xmp</span> preset.
+                    </p>
+                  </div>
+
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => photoInputRef.current?.click()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") photoInputRef.current?.click();
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      setDragging(true);
+                    }}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      setDragging(false);
+                    }}
+                    onDrop={onDrop}
+                    className={cn(
+                      "group mt-10 flex min-h-[320px] cursor-pointer flex-col items-center justify-center gap-4 rounded-3xl border border-dashed px-6 py-12 text-center transition",
+                      dragging
+                        ? "border-orange-400/70 bg-orange-500/[0.08]"
+                        : "border-white/15 bg-white/[0.02] hover:border-orange-400/50 hover:bg-orange-500/[0.04]"
+                    )}
+                  >
+                    <motion.div
+                      animate={{ scale: dragging ? 1.12 : 1, y: dragging ? -4 : 0 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    >
+                      <div
+                        className={cn(
+                          "flex size-16 items-center justify-center rounded-2xl transition",
+                          dragging
+                            ? "bg-orange-500/20 text-orange-300"
+                            : "bg-orange-500/10 text-orange-400 group-hover:bg-orange-500/20"
+                        )}
+                      >
+                        {busy ? <Loader2 className="size-7 animate-spin" /> : <CloudUpload className="size-7" />}
+                      </div>
+                    </motion.div>
+                    <div>
+                      <p className="text-base font-medium">
+                        {busy ? "Reading your photo…" : "Drag & drop a photo"}
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">or click to browse — JPG, PNG, WebP</p>
+                    </div>
+                    {error ? <p className="text-sm text-red-400">{error}</p> : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => importInputRef.current?.click()}
+                    className="mt-4 block w-full text-center text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  >
+                    or import an existing .xmp preset
+                  </button>
+                </section>
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="name"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              className="mx-auto max-w-5xl"
             >
               <div className="text-center">
                 <span className="inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[11px] font-medium text-orange-300">
-                  <Sparkles className="size-3.5" /> Reads brightness &amp; color from the pixels
+                  <Sparkles className="size-3.5" /> Style engine
                 </span>
-                <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
-                  Photo in. <span className="gradient-text">Preset out.</span>
+                <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Create a preset from a <span className="gradient-text">name</span>
                 </h1>
-                <p className="mx-auto mt-4 max-w-xl text-sm text-muted-foreground">
-                  Drop a photo and CAPDIT measures exposure, contrast and color right in your
-                  browser, then builds a matching Lightroom <span className="font-mono">.xmp</span> preset.
+                <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
+                  Describe the look — the engine maps it to Lightroom parameters. Works offline; uses
+                  an AI model automatically if a key is configured.
                 </p>
               </div>
 
-              <div
-                role="button"
-                tabIndex={0}
-                onClick={() => inputRef.current?.click()}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") inputRef.current?.click();
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragging(true);
-                }}
-                onDragLeave={(event) => {
-                  event.preventDefault();
-                  setDragging(false);
-                }}
-                onDrop={onDrop}
-                className={cn(
-                  "group mt-10 flex min-h-[320px] cursor-pointer flex-col items-center justify-center gap-4 rounded-3xl border border-dashed px-6 py-12 text-center transition",
-                  dragging
-                    ? "border-orange-400/70 bg-orange-500/[0.08]"
-                    : "border-white/15 bg-white/[0.02] hover:border-orange-400/50 hover:bg-orange-500/[0.04]"
-                )}
-              >
-                <motion.div
-                  animate={{ scale: dragging ? 1.12 : 1, y: dragging ? -4 : 0 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                >
-                  <div
-                    className={cn(
-                      "flex size-16 items-center justify-center rounded-2xl transition",
-                      dragging
-                        ? "bg-orange-500/20 text-orange-300"
-                        : "bg-orange-500/10 text-orange-400 group-hover:bg-orange-500/20"
-                    )}
+              <div className="mt-8 rounded-3xl border border-white/10 bg-card/70 p-5 backdrop-blur">
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    value={styleText}
+                    onChange={(event) => setStyleText(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void handleGenerateName();
+                    }}
+                    placeholder="e.g. Teal & Orange Cinematic"
+                    className="h-11"
+                  />
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="shrink-0"
+                    onClick={() => handleGenerateName()}
+                    disabled={styleBusy || !styleText.trim()}
                   >
-                    {busy ? <Loader2 className="size-7 animate-spin" /> : <CloudUpload className="size-7" />}
-                  </div>
-                </motion.div>
-                <div>
-                  <p className="text-base font-medium">
-                    {busy ? "Reading your photo…" : "Drag & drop a photo"}
-                  </p>
-                  <p className="mt-1 text-sm text-muted-foreground">or click to browse — JPG, PNG, WebP</p>
+                    {styleBusy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}
+                    Generate
+                  </Button>
                 </div>
-                {error ? <p className="text-sm text-red-400">{error}</p> : null}
-              </div>
-            </motion.section>
-          ) : (
-            <motion.section
-              key="workspace"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]"
-            >
-              <div className="space-y-6">
-                <div className="overflow-hidden rounded-3xl border border-white/10 bg-card/70 backdrop-blur">
-                  <div className="flex items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
-                    <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                      <span className="size-1.5 shrink-0 rounded-full bg-emerald-400" />
-                      <span className="truncate">{image.name}</span>
-                    </div>
-                    <div className="flex shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
-                      {(["before", "after"] as const).map((mode) => (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => setView(mode)}
-                          className={cn(
-                            "rounded-md px-3 py-1 text-xs font-medium capitalize transition",
-                            view === mode
-                              ? "bg-orange-500 text-[#1c0f02]"
-                              : "text-muted-foreground hover:text-foreground"
-                          )}
-                        >
-                          {mode}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="checkerboard relative flex min-h-[280px] items-center justify-center p-3">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={image.previewUrl}
-                      alt={view === "before" ? "Before" : "After"}
-                      className="max-h-[520px] w-full object-contain transition-[filter] duration-300"
-                      style={{ filter: view === "after" ? afterFilter : "none" }}
-                    />
-                    {busy ? (
-                      <div className="absolute inset-0 grid place-items-center bg-black/40 backdrop-blur-sm">
-                        <Loader2 className="size-8 animate-spin text-orange-400" />
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-
-                <div className="rounded-3xl border border-white/10 bg-card/70 p-5 backdrop-blur">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-semibold">Adjust</h2>
-                    <Button
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {EXAMPLE_STYLES.map((example) => (
+                    <button
+                      key={example}
                       type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => preset && setAdjust(adjustmentsFromPreset(preset))}
+                      onClick={() => handleGenerateName(example)}
+                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-muted-foreground transition hover:border-orange-400/40 hover:text-foreground"
                     >
-                      Reset
-                    </Button>
-                  </div>
-                  {GROUPS.map((group) => (
-                    <div key={group} className="mt-5">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {group}
-                      </p>
-                      <div className="mt-3 grid gap-x-6 gap-y-4 sm:grid-cols-2">
-                        {FIELDS.filter((field) => field.group === group).map((field) => {
-                          const range = LIGHTROOM_RANGES[field.key];
-                          return (
-                            <SliderRow
-                              key={field.key}
-                              label={field.label}
-                              value={adjust[field.key]}
-                              min={range.min}
-                              max={range.max}
-                              step={range.step}
-                              onChange={(next) =>
-                                setAdjust((prev) => (prev ? { ...prev, [field.key]: next } : prev))
-                              }
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
+                      {example}
+                    </button>
                   ))}
                 </div>
               </div>
 
-              <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
-                <div className="rounded-2xl border border-white/10 bg-card/70 p-4 backdrop-blur">
-                  <div className="flex items-center gap-3">
-                    <div className="size-12 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={image.previewUrl} alt="" className="size-full object-cover" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium" title={image.name}>
-                        {image.name}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {image.width && image.height ? `${image.width} × ${image.height}` : "—"} ·{" "}
-                        {formatBytes(image.size)}
-                      </p>
-                    </div>
+              {nameReady && adjust ? (
+                <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+                  <div className="space-y-6">
+                    <StyleBanner adjust={adjust} />
+                    <AdjustPanel
+                      adjust={adjust}
+                      onChange={(key, value) =>
+                        setAdjust((prev) => (prev ? { ...prev, [key]: value } : prev))
+                      }
+                      onReset={() => baseAdjust && setAdjust(baseAdjust)}
+                    />
                   </div>
-                  <div className="mt-3 flex gap-2">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => inputRef.current?.click()}
-                    >
-                      <RefreshCw className="size-3.5" /> Replace
-                    </Button>
-                    <Button type="button" variant="ghost" size="sm" onClick={handleRemove}>
-                      <X className="size-3.5" /> Remove
-                    </Button>
-                  </div>
+                  <aside className="space-y-4 lg:sticky lg:top-20 lg:self-start">
+                    <ExportPanel
+                      sourceName={sourceName}
+                      onNameChange={setSourceName}
+                      onDownload={handleDownload}
+                      onImport={() => importInputRef.current?.click()}
+                      disabled={false}
+                    />
+                  </aside>
                 </div>
-
-                <div className="rounded-2xl border border-white/10 bg-card/70 p-4 backdrop-blur">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Detected
-                  </h3>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <Stat label="Brightness" value={`${stats.brightness}%`} />
-                    <Stat label="Contrast" value={`${stats.contrast}%`} />
-                    <Stat label="Saturation" value={`${stats.saturation}%`} />
-                    <Stat label="Cast" value={stats.colorCast} />
-                  </div>
-                  <div className="mt-3 flex items-center gap-1.5">
-                    {stats.dominantColors.map((color) => (
-                      <span
-                        key={color}
-                        className="size-6 rounded-md border border-white/15"
-                        style={{ backgroundColor: color }}
-                        title={color}
-                      />
-                    ))}
-                  </div>
-                  <p className="mt-3 text-[11px] text-muted-foreground">{stats.lookSummary}</p>
-                </div>
-
-                <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-b from-orange-500/[0.08] to-transparent p-4">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wider text-orange-300">
-                    Export preset
-                  </h3>
-                  <label
-                    htmlFor="preset-name"
-                    className="mt-3 block text-[11px] uppercase tracking-wide text-muted-foreground"
-                  >
-                    Preset name
-                  </label>
-                  <Input
-                    id="preset-name"
-                    value={sourceName}
-                    onChange={(event) => setSourceName(event.target.value)}
-                    className="mt-1.5"
-                    placeholder="my-photo"
-                  />
-                  <Button
-                    type="button"
-                    className="mt-4 w-full"
-                    size="lg"
-                    onClick={handleDownload}
-                    disabled={busy}
-                    data-testid="download-xmp"
-                  >
-                    <Download className="size-4" /> Download .xmp
-                  </Button>
-                  <p className="mt-3 text-[11px] leading-relaxed text-muted-foreground">
-                    Lightroom Mobile → Edit → Presets → Yours → ⋯ → Import Presets → pick the .xmp file.
-                  </p>
-                </div>
-              </aside>
-            </motion.section>
+              ) : null}
+            </motion.div>
           )}
         </AnimatePresence>
       </main>

@@ -1,4 +1,5 @@
 import { clamp } from "./utils";
+import { type Adjustments } from "./adjustments";
 import type {
   AnalysisResult,
   BasicParams,
@@ -10,28 +11,8 @@ import type {
   HLSLookupKey,
   HSLParams,
   LightroomPreset,
-  LookProfile,
   ToneCurveSet,
 } from "./types";
-
-export const LIGHTROOM_RANGES = {
-  exposure: { min: -5, max: 5, step: 0.01 },
-  contrast: { min: -100, max: 100, step: 1 },
-  highlights: { min: -100, max: 100, step: 1 },
-  shadows: { min: -100, max: 100, step: 1 },
-  whites: { min: -100, max: 100, step: 1 },
-  blacks: { min: -100, max: 100, step: 1 },
-  temperature: { min: -100, max: 100, step: 1 },
-  tint: { min: -100, max: 100, step: 1 },
-  texture: { min: -100, max: 100, step: 1 },
-  clarity: { min: -100, max: 100, step: 1 },
-  dehaze: { min: -100, max: 100, step: 1 },
-  vibrance: { min: -100, max: 100, step: 1 },
-  saturation: { min: -100, max: 100, step: 1 },
-  sharpening: { min: 0, max: 100, step: 1 },
-  vignette: { min: -100, max: 100, step: 1 },
-  grain: { min: 0, max: 100, step: 1 },
-} as const;
 
 const HSL_KEYS: HLSLookupKey[] = [
   "red",
@@ -74,25 +55,62 @@ function neutralCalibration(): CalibrationParams {
   return { red: channel(), green: channel(), blue: channel() };
 }
 
-export function generatePresetFromLook(
-  look: LookProfile,
-  analysis: AnalysisResult,
+function analysisFromAdjustments(adjust: Adjustments): AnalysisResult {
+  const cast = adjust.temperature > 12 ? "warm" : adjust.temperature < -12 ? "cool" : "neutral";
+  return {
+    lighting: {
+      exposure: adjust.exposure,
+      highlights: adjust.highlights,
+      shadows: adjust.shadows,
+      whites: adjust.whites,
+      blacks: adjust.blacks,
+      dynamicRange: clamp(Math.round(50 + adjust.contrast * 0.5), 0, 100),
+    },
+    color: {
+      dominantColors: [],
+      colorTemperature: adjust.temperature,
+      tint: adjust.tint,
+      saturation: clamp(Math.round(50 + adjust.saturation * 0.4), 0, 100),
+      vibrance: adjust.vibrance,
+      colorCast: cast,
+    },
+    photography: {
+      environment: "outdoor",
+      lighting: "natural",
+      subject: "other",
+      background: "style",
+    },
+    visual: {
+      contrast: adjust.contrast,
+      mood: "styled",
+      atmosphere: "clear",
+      colorHarmony: "custom",
+      film: "clean",
+    },
+    provider: "style-engine",
+    model: "style-engine",
+    analyzedAt: Date.now(),
+  };
+}
+
+export function generatePresetFromAdjustments(
+  adjust: Adjustments,
   sourceFileName: string
 ): LightroomPreset {
   const basic: BasicParams = {
-    exposure: round(look.exposure, 2),
-    contrast: clamp(Math.round(look.contrast), -100, 100),
-    highlights: clamp(Math.round(look.highlights), -100, 100),
-    shadows: clamp(Math.round(look.shadows), -100, 100),
-    whites: clamp(Math.round(look.whites), -100, 100),
-    blacks: clamp(Math.round(look.blacks), -100, 100),
-    temperature: clamp(Math.round(look.temperature), -100, 100),
-    tint: clamp(Math.round(look.tint), -100, 100),
-    texture: 0,
-    clarity: clamp(Math.round(look.clarity), -100, 100),
-    dehaze: 0,
-    vibrance: clamp(Math.round(look.vibrance), -100, 100),
-    saturation: clamp(Math.round(look.saturation), -100, 100),
+    exposure: round(adjust.exposure, 2),
+    contrast: clamp(Math.round(adjust.contrast), -100, 100),
+    highlights: clamp(Math.round(adjust.highlights), -100, 100),
+    shadows: clamp(Math.round(adjust.shadows), -100, 100),
+    whites: clamp(Math.round(adjust.whites), -100, 100),
+    blacks: clamp(Math.round(adjust.blacks), -100, 100),
+    temperature: clamp(Math.round(adjust.temperature), -100, 100),
+    tint: clamp(Math.round(adjust.tint), -100, 100),
+    texture: clamp(Math.round(adjust.texture), -100, 100),
+    clarity: clamp(Math.round(adjust.clarity), -100, 100),
+    dehaze: clamp(Math.round(adjust.dehaze), -100, 100),
+    vibrance: clamp(Math.round(adjust.vibrance), -100, 100),
+    saturation: clamp(Math.round(adjust.saturation), -100, 100),
   };
 
   const colorGrading: ColorGradingParams = {
@@ -104,7 +122,7 @@ export function generatePresetFromLook(
   };
 
   const detail: DetailParams = {
-    sharpening: 25,
+    sharpening: clamp(Math.round(adjust.sharpening), 0, 100),
     radius: 1,
     detail: 25,
     masking: 0,
@@ -112,8 +130,8 @@ export function generatePresetFromLook(
   };
 
   const effects: EffectsParams = {
-    vignette: clamp(Math.round(look.vignette), -100, 100),
-    grain: 0,
+    vignette: clamp(Math.round(adjust.vignette), -100, 100),
+    grain: clamp(Math.round(adjust.grain), 0, 100),
     grainSize: 12,
     grainRoughness: 50,
   };
@@ -123,9 +141,9 @@ export function generatePresetFromLook(
     name: `CAPDIT - ${sourceFileName.replace(/\.[^.]+$/, "")}`,
     sourceFileName,
     createdAt: Date.now(),
-    analysis,
+    analysis: analysisFromAdjustments(adjust),
     basic,
-    toneCurve: makeToneCurve(look.contrast),
+    toneCurve: makeToneCurve(adjust.contrast),
     hsl: neutralHsl(),
     colorGrading,
     detail,

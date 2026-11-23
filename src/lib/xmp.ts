@@ -70,6 +70,7 @@ export function buildXmpXml(preset: LightroomPreset): string {
   const group = "CAPDIT Presets";
   const uuid = toUuid(preset.id);
   const b = preset.basic;
+  const isBW = b.saturation <= -99;
   const d = preset.detail;
   const e = preset.effects;
   const cal = preset.calibration;
@@ -98,7 +99,8 @@ export function buildXmpXml(preset: LightroomPreset): string {
   lines.push('    crs:ContactInfo=""');
   lines.push('    crs:Version="16.0"');
   lines.push('    crs:ProcessVersion="11.0"');
-  lines.push('    crs:ConvertToGrayscale="False"');
+  lines.push(`    crs:ConvertToGrayscale="${isBW ? "True" : "False"}"`);
+  lines.push(`    crs:Treatment="${isBW ? "Black and White" : "Color"}"`);
   lines.push('    crs:WhiteBalance="Custom"');
   lines.push(`    crs:Temperature="${kelvin}"`);
   lines.push(`    crs:Tint="${tint}"`);
