@@ -3,50 +3,46 @@ import type {
   AnalysisResult,
   BasicParams,
   CalibrationChannel,
+  CalibrationParams,
   ColorGradingParams,
   DetailParams,
   EffectsParams,
   HLSLookupKey,
   HSLParams,
   LightroomPreset,
+  LookProfile,
   ToneCurveSet,
 } from "./types";
 
 export const LIGHTROOM_RANGES = {
   exposure: { min: -5, max: 5, step: 0.01 },
-  contrast: { min: 0, max: 100, step: 1 },
+  contrast: { min: -100, max: 100, step: 1 },
   highlights: { min: -100, max: 100, step: 1 },
   shadows: { min: -100, max: 100, step: 1 },
-  whites: { min: 0, max: 100, step: 1 },
-  blacks: { min: 0, max: 100, step: 1 },
+  whites: { min: -100, max: 100, step: 1 },
+  blacks: { min: -100, max: 100, step: 1 },
   temperature: { min: -100, max: 100, step: 1 },
-  tint: { min: -50, max: 50, step: 1 },
+  tint: { min: -100, max: 100, step: 1 },
   texture: { min: -100, max: 100, step: 1 },
   clarity: { min: -100, max: 100, step: 1 },
   dehaze: { min: -100, max: 100, step: 1 },
   vibrance: { min: -100, max: 100, step: 1 },
-  saturation: { min: 0, max: 100, step: 1 },
+  saturation: { min: -100, max: 100, step: 1 },
   sharpening: { min: 0, max: 100, step: 1 },
-  radius: { min: 0.1, max: 5, step: 0.1 },
-  detail: { min: 0, max: 100, step: 1 },
-  masking: { min: 0, max: 100, step: 1 },
-  noiseReduction: { min: 0, max: 100, step: 1 },
   vignette: { min: -100, max: 100, step: 1 },
   grain: { min: 0, max: 100, step: 1 },
-  grainSize: { min: 0, max: 30, step: 1 },
-  grainRoughness: { min: 0, max: 100, step: 1 },
 } as const;
 
-const HSL_HUES: Record<HLSLookupKey, number> = {
-  red: 0,
-  orange: 30,
-  yellow: 50,
-  green: 120,
-  aqua: 180,
-  blue: 220,
-  purple: 270,
-  magenta: 300,
-};
+const HSL_KEYS: HLSLookupKey[] = [
+  "red",
+  "orange",
+  "yellow",
+  "green",
+  "aqua",
+  "blue",
+  "purple",
+  "magenta",
+];
 
 function round(value: number, decimals = 0): number {
   const factor = 10 ** decimals;
@@ -54,91 +50,86 @@ function round(value: number, decimals = 0): number {
 }
 
 function makeToneCurve(contrast: number): ToneCurveSet {
+  const factor = clamp(1 + contrast / 120, 0.45, 1.6);
   const pointAt = (x: number) => {
     const clamped = clamp(x, 0, 1);
-    const y = (1 - Math.cos(Math.PI * clamped)) / 2;
-    const scaled = y * (1 + ((clamp(contrast, 0, 100) - 50) / 50) * 0.6);
-    return { x: clamped, y: clamp(scaled, 0, 1) };
+    const base = (1 - Math.cos(Math.PI * clamped)) / 2;
+    const y = 0.5 + (base - 0.5) * factor;
+    return { x: clamped, y: clamp(y, 0, 1) };
   };
-  const pts = [pointAt(0), pointAt(0.25), pointAt(0.5), pointAt(0.75), pointAt(1)];
+  const pts = [0, 0.25, 0.5, 0.75, 1].map(pointAt);
   return { rgb: pts, red: pts, green: pts, blue: pts };
 }
 
-function generateHsl(analysis: AnalysisResult): Record<HLSLookupKey, HSLParams> {
-  const saturation = clamp(analysis.color.saturation, 0, 100);
-  const luminanceBase = clamp(50 - analysis.lighting.exposure * 10, 10, 90);
+function neutralHsl(): Record<HLSLookupKey, HSLParams> {
   const result = {} as Record<HLSLookupKey, HSLParams>;
-  (Object.keys(HSL_HUES) as HLSLookupKey[]).forEach((key) => {
-    result[key] = {
-      hue: HSL_HUES[key],
-      saturation: clamp(Math.round(saturation), 0, 100),
-      luminance: clamp(Math.round(luminanceBase), 10, 90),
-    };
+  HSL_KEYS.forEach((key) => {
+    result[key] = { hue: 0, saturation: 50, luminance: 50 };
   });
   return result;
 }
 
-export function generatePreset(analysis: AnalysisResult, sourceFileName: string): LightroomPreset {
+function neutralCalibration(): CalibrationParams {
+  const channel = (): CalibrationChannel => ({ hue: 0, saturation: 50, luminance: 50 });
+  return { red: channel(), green: channel(), blue: channel() };
+}
+
+export function generatePresetFromLook(
+  look: LookProfile,
+  analysis: AnalysisResult,
+  sourceFileName: string
+): LightroomPreset {
   const basic: BasicParams = {
-    exposure: round(clamp(analysis.lighting.exposure, -5, 5), 2),
-    contrast: clamp(Math.round(analysis.visual.contrast), 0, 100),
-    highlights: clamp(Math.round(analysis.lighting.highlights), -100, 100),
-    shadows: clamp(Math.round(analysis.lighting.shadows), -100, 100),
-    whites: clamp(Math.round(analysis.lighting.whites), 0, 100),
-    blacks: clamp(Math.round(analysis.lighting.blacks), 0, 100),
-    temperature: clamp(Math.round(analysis.color.colorTemperature), -100, 100),
-    tint: clamp(Math.round(analysis.color.tint), -50, 50),
-    texture: clamp(Math.round(10 + analysis.color.saturation), -100, 100),
-    clarity: clamp(Math.round(analysis.visual.contrast * 0.8), -100, 100),
-    dehaze: clamp(Math.round(analysis.visual.atmosphere === "clear" ? 12 : -8), -100, 100),
-    vibrance: clamp(Math.round(analysis.color.vibrance), -100, 100),
-    saturation: clamp(Math.round(analysis.color.saturation), 0, 100),
+    exposure: round(look.exposure, 2),
+    contrast: clamp(Math.round(look.contrast), -100, 100),
+    highlights: clamp(Math.round(look.highlights), -100, 100),
+    shadows: clamp(Math.round(look.shadows), -100, 100),
+    whites: clamp(Math.round(look.whites), -100, 100),
+    blacks: clamp(Math.round(look.blacks), -100, 100),
+    temperature: clamp(Math.round(look.temperature), -100, 100),
+    tint: clamp(Math.round(look.tint), -100, 100),
+    texture: 0,
+    clarity: clamp(Math.round(look.clarity), -100, 100),
+    dehaze: 0,
+    vibrance: clamp(Math.round(look.vibrance), -100, 100),
+    saturation: clamp(Math.round(look.saturation), -100, 100),
   };
 
-  const toneCurve = makeToneCurve(analysis.visual.contrast);
-
   const colorGrading: ColorGradingParams = {
-    shadows: clamp(Math.round(analysis.lighting.shadows), -50, 50),
-    midtones: clamp(Math.round(analysis.visual.contrast), 0, 100),
-    highlights: clamp(Math.round(analysis.lighting.highlights), -50, 50),
+    shadows: 0,
+    midtones: 0,
+    highlights: 0,
     blending: 0,
     balance: 0,
   };
 
   const detail: DetailParams = {
-    sharpening: clamp(Math.round(20 + analysis.visual.contrast), 0, 100),
+    sharpening: 25,
     radius: 1,
-    detail: 50,
-    masking: 50,
-    noiseReduction: clamp(Math.round(analysis.lighting.dynamicRange > 60 ? 20 : 40), 0, 100),
+    detail: 25,
+    masking: 0,
+    noiseReduction: 10,
   };
 
   const effects: EffectsParams = {
-    vignette: clamp(Math.round(analysis.lighting.dynamicRange > 60 ? -8 : 6), -100, 100),
-    grain: clamp(Math.round(analysis.visual.film === "grainy" ? 24 : 8), 0, 100),
+    vignette: clamp(Math.round(look.vignette), -100, 100),
+    grain: 0,
     grainSize: 12,
     grainRoughness: 50,
   };
 
-  const calibration = {
-    red: { hue: 0, saturation: clamp(Math.round(60 + analysis.color.saturation), 0, 100), luminance: 50 },
-    green: { hue: 120, saturation: clamp(Math.round(55 + analysis.color.saturation), 0, 100), luminance: 50 },
-    blue: { hue: 220, saturation: clamp(Math.round(60 + analysis.color.saturation), 0, 100), luminance: 50 },
-  } as Record<"red" | "green" | "blue", CalibrationChannel>;
-
-  const preset: LightroomPreset = {
-    id: `preset_${Date.now().toString(36)}`,
-    name: `AI Preset — ${sourceFileName.replace(/\.[^.]+$/, "")}`,
+  return {
+    id: `preset_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`,
+    name: `CAPDIT - ${sourceFileName.replace(/\.[^.]+$/, "")}`,
     sourceFileName,
     createdAt: Date.now(),
     analysis,
     basic,
-    toneCurve,
-    hsl: generateHsl(analysis),
+    toneCurve: makeToneCurve(look.contrast),
+    hsl: neutralHsl(),
     colorGrading,
     detail,
     effects,
-    calibration,
+    calibration: neutralCalibration(),
   };
-  return preset;
 }

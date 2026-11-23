@@ -164,3 +164,19 @@ export interface LightroomPreset {
   effects: EffectsParams;
   calibration: CalibrationParams;
 }
+
+export interface LookProfile {
+  exposure: number;
+  contrast: number;
+  highlights: number;
+  shadows: number;
+  whites: number;
+  blacks: number;
+  temperature: number;
+  tint: number;
+  vibrance: number;
+  saturation: number;
+  clarity: number;
+  vignette: number;
+  summary: string;
+}

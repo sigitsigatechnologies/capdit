@@ -1,4 +1,4 @@
-import type { AnalysisResult, UploadedImage } from "./types";
+import type { AnalysisResult, LookProfile, UploadedImage } from "./types";
 import { clamp } from "./utils";
 
 export interface ImageStats {
@@ -9,11 +9,13 @@ export interface ImageStats {
   tint: number;
   dominantColors: string[];
   colorCast: string;
+  lookSummary: string;
 }
 
 export interface LocalAnalysis {
   analysis: AnalysisResult;
   stats: ImageStats;
+  look: LookProfile;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -55,6 +57,10 @@ export async function analyzeImage(image: UploadedImage): Promise<LocalAnalysis>
   let greenSum = 0;
   let brightCount = 0;
   let darkCount = 0;
+  let centerLumSum = 0;
+  let centerCount = 0;
+  let borderLumSum = 0;
+  let borderCount = 0;
   const buckets = new Map<number, { r: number; g: number; b: number; n: number }>();
 
   for (let i = 0; i < data.length; i += 4) {
@@ -66,6 +72,20 @@ export async function analyzeImage(image: UploadedImage): Promise<LocalAnalysis>
     lumSqSum += lum * lum;
     if (lum > 0.8) brightCount += 1;
     if (lum < 0.2) darkCount += 1;
+
+    const pixel = i / 4;
+    const px = pixel % width;
+    const py = Math.floor(pixel / width);
+    const dx = px / width - 0.5;
+    const dy = py / height - 0.5;
+    const dist2 = dx * dx + dy * dy;
+    if (dist2 < 0.08) {
+      centerLumSum += lum;
+      centerCount += 1;
+    } else if (dist2 > 0.15) {
+      borderLumSum += lum;
+      borderCount += 1;
+    }
 
     const max = Math.max(r, g, b);
     const min = Math.min(r, g, b);
@@ -93,6 +113,8 @@ export async function analyzeImage(image: UploadedImage): Promise<LocalAnalysis>
   const meanGreen = greenSum / total;
   const brightFrac = brightCount / total;
   const darkFrac = darkCount / total;
+  const centerLum = centerCount ? centerLumSum / centerCount : meanLum;
+  const borderLum = borderCount ? borderLumSum / borderCount : meanLum;
 
   const dominantColors = [...buckets.values()]
     .sort((a, b) => b.n - a.n)
@@ -110,26 +132,48 @@ export async function analyzeImage(image: UploadedImage): Promise<LocalAnalysis>
             ? "magenta"
             : "neutral";
 
-  const exposure = clamp(Math.log2(0.45 / Math.max(meanLum, 0.03)) * 0.7, -2.5, 2.5);
-  const highlights = clamp(Math.round(-brightFrac * 160), -100, 0);
-  const shadows = clamp(Math.round(darkFrac * 160), 0, 100);
-  const whites = clamp(Math.round(brightFrac * 180), 0, 100);
-  const blacks = clamp(Math.round(darkFrac * 120), 0, 100);
-  const dynamicRange = clamp(Math.round(stdLum * 260), 0, 100);
-  const contrast = clamp(Math.round(stdLum * 220), 0, 100);
-  const saturation = clamp(Math.round(meanSat * 100), 0, 100);
-  const vibrance = clamp(Math.round((0.42 - meanSat) * 160), -100, 100);
-  const temperature = clamp(Math.round(meanWarm * 260), -100, 100);
-  const tint = clamp(Math.round(meanGreen * 200), -50, 50);
+  const contrast = clamp(Math.round((stdLum - 0.2) * 320), -100, 100);
+  const temperature = clamp(Math.round(meanWarm * 300), -100, 100);
+  const tint = clamp(Math.round(-meanGreen * 260), -100, 100);
+  const saturation = clamp(Math.round((meanSat - 0.35) * 260), -100, 100);
+  const vibrance = clamp(Math.round(saturation * 0.5), -100, 100);
+  const highlights = clamp(Math.round((brightFrac - 0.1) * 200), -100, 100);
+  const shadows = clamp(Math.round(-contrast * 0.5 + (darkFrac - 0.18) * 120), -100, 100);
+  const whites = clamp(Math.round((meanLum - 0.5) * 160 + (brightFrac - 0.1) * 90), -100, 100);
+  const blacks = clamp(Math.round(-contrast * 0.45 + (darkFrac - 0.18) * 80), -100, 100);
+  const clarity = clamp(Math.round(contrast * 0.5), -100, 100);
+  const exposure = Number(clamp((meanLum - 0.5) * 2.0, -1.5, 1.5).toFixed(2));
+  const vignette = clamp(Math.round((borderLum - centerLum) * 160), -100, 100);
+
+  const warmthLabel = temperature > 12 ? "Warm" : temperature < -12 ? "Cool" : "Neutral";
+  const toneLabel = contrast > 12 ? "High contrast" : contrast < -12 ? "Soft" : "Balanced";
+  const colorLabel = saturation > 12 ? "Vivid" : saturation < -12 ? "Muted" : "Natural";
+  const summary = `${warmthLabel} · ${toneLabel} · ${colorLabel}`;
+
+  const look: LookProfile = {
+    exposure,
+    contrast,
+    highlights,
+    shadows,
+    whites,
+    blacks,
+    temperature,
+    tint,
+    vibrance,
+    saturation,
+    clarity,
+    vignette,
+    summary,
+  };
 
   const analysis: AnalysisResult = {
     lighting: {
-      exposure: Number(exposure.toFixed(2)),
+      exposure,
       highlights,
       shadows,
       whites,
       blacks,
-      dynamicRange,
+      dynamicRange: clamp(Math.round(stdLum * 260), 0, 100),
     },
     color: {
       dominantColors: dominantColors.length ? dominantColors : ["#808080"],
@@ -148,24 +192,25 @@ export async function analyzeImage(image: UploadedImage): Promise<LocalAnalysis>
     visual: {
       contrast,
       mood: meanLum < 0.35 ? "moody" : meanLum > 0.65 ? "airy" : "balanced",
-      atmosphere: contrast > 50 ? "clear" : "soft",
+      atmosphere: contrast > 12 ? "clear" : "soft",
       colorHarmony: colorCast === "neutral" ? "neutral" : `${colorCast} cast`,
       film: meanSat < 0.18 ? "desaturated" : "clean",
     },
     provider: "local",
-    model: "canvas-analysis",
+    model: "canvas-look",
     analyzedAt: Date.now(),
   };
 
   const stats: ImageStats = {
     brightness: clamp(Math.round(meanLum * 100), 0, 100),
-    contrast,
-    saturation,
+    contrast: clamp(Math.round(stdLum * 220), 0, 100),
+    saturation: clamp(Math.round(meanSat * 100), 0, 100),
     warmth: temperature,
     tint,
     dominantColors: analysis.color.dominantColors,
     colorCast,
+    lookSummary: summary,
   };
 
-  return { analysis, stats };
+  return { analysis, stats, look };
 }

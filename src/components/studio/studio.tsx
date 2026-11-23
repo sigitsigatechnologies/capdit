@@ -17,7 +17,7 @@ import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
 import { analyzeImage, type ImageStats } from "@/lib/analyze-image";
 import { createUploadedImage } from "@/lib/image-info";
-import { generatePreset, LIGHTROOM_RANGES } from "@/lib/generation";
+import { generatePresetFromLook, LIGHTROOM_RANGES } from "@/lib/generation";
 import { downloadXmp } from "@/lib/xmp";
 import { clamp, cn, formatBytes } from "@/lib/utils";
 import type { AnalysisResult, LightroomPreset, UploadedImage } from "@/lib/types";
@@ -113,8 +113,8 @@ function applyAdjustments(preset: LightroomPreset, a: Adjustments): LightroomPre
 
 function previewFilter(a: Adjustments): string {
   const brightness = Math.pow(2, a.exposure).toFixed(3);
-  const contrast = (0.75 + (a.contrast / 100) * 0.6).toFixed(3);
-  const saturate = (0.6 + (a.saturation / 100) * 1.2).toFixed(3);
+  const contrast = (1 + (a.contrast / 100) * 0.8).toFixed(3);
+  const saturate = Math.max(0, 1 + a.saturation / 100).toFixed(3);
   const sepia = ((clamp(a.temperature, 0, 100) / 100) * 0.25).toFixed(3);
   return `brightness(${brightness}) contrast(${contrast}) saturate(${saturate}) sepia(${sepia})`;
 }
@@ -190,8 +190,8 @@ export function Studio() {
     setBusy(true);
     try {
       const uploaded = await createUploadedImage(file);
-      const { analysis: nextAnalysis, stats: nextStats } = await analyzeImage(uploaded);
-      const nextPreset = generatePreset(nextAnalysis, file.name);
+      const { analysis: nextAnalysis, stats: nextStats, look } = await analyzeImage(uploaded);
+      const nextPreset = generatePresetFromLook(look, nextAnalysis, file.name);
       setImage((prev) => {
         if (prev) URL.revokeObjectURL(prev.previewUrl);
         return uploaded;
@@ -490,6 +490,7 @@ export function Studio() {
                       />
                     ))}
                   </div>
+                  <p className="mt-3 text-[11px] text-muted-foreground">{stats.lookSummary}</p>
                 </div>
 
                 <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-b from-orange-500/[0.08] to-transparent p-4">
