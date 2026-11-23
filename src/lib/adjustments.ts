@@ -135,11 +135,19 @@ export function adjustmentsFromLook(look: LookProfile): Adjustments {
 }
 
 export function summarizeAdjustments(adjust: Adjustments): string {
-  const warmth = adjust.temperature > 12 ? "Warm" : adjust.temperature < -12 ? "Cool" : "Neutral";
-  const tone = adjust.contrast > 12 ? "High contrast" : adjust.contrast < -12 ? "Soft" : "Balanced";
-  const color =
-    adjust.saturation > 12 ? "Vivid" : adjust.saturation < -12 ? "Muted" : "Natural";
-  return `${warmth} · ${tone} · ${color}`;
+  const parts: string[] = [];
+  parts.push(adjust.temperature >= 8 ? "Warm" : adjust.temperature <= -8 ? "Cool" : "Neutral");
+  if (adjust.exposure >= 0.2) parts.push("Bright");
+  else if (adjust.exposure <= -0.2) parts.push("Low-key");
+  parts.push(adjust.contrast >= 10 ? "High contrast" : adjust.contrast <= -8 ? "Soft" : "Balanced");
+  parts.push(
+    adjust.saturation >= 8 || adjust.vibrance >= 12
+      ? "Vivid"
+      : adjust.saturation <= -8
+        ? "Muted"
+        : "Natural"
+  );
+  return parts.join(" · ");
 }
 
 export function previewFilter(adjust: Adjustments): string {

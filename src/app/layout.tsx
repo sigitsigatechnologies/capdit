@@ -19,19 +19,21 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <TooltipProvider delayDuration={250}>
           {children}
           <Toaster
-            theme="dark"
+            theme="light"
             position="top-right"
             closeButton
             toastOptions={{
               style: {
-                background: "#16161a",
-                border: "1px solid rgba(255,255,255,0.09)",
-                color: "#f4f4f5",
+                background: "#ffffff",
+                border: "1px solid rgba(17,17,20,0.08)",
+                color: "#111114",
+                borderRadius: "14px",
+                boxShadow: "0 12px 32px -12px rgba(17,17,20,0.25)",
               },
             }}
           />

@@ -40,6 +40,11 @@ const EXAMPLE_STYLES = [
   "Vintage Sunset",
   "Neon Night",
   "Airy Minimal",
+  "Fujifilm Classic Chrome",
+  "Sony Alpha",
+  "Hasselblad Natural",
+  "Nikon Vivid",
+  "Kodak Portra",
 ];
 
 type AdjustGroup = "Light" | "Color" | "Detail" | "Effects";
@@ -87,7 +92,7 @@ function SliderRow({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <span className="text-xs text-foreground/90">{label}</span>
-        <span className="rounded-md border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
+        <span className="rounded-md border border-border bg-secondary px-1.5 py-0.5 text-[11px] tabular-nums text-muted-foreground">
           {formatValue(value, step)}
         </span>
       </div>
@@ -105,7 +110,7 @@ function SliderRow({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+    <div className="rounded-lg border border-border bg-secondary px-2.5 py-2">
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-sm font-semibold capitalize tabular-nums">{value}</p>
     </div>
@@ -122,7 +127,7 @@ function AdjustPanel({
   onReset: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-card/70 p-5 backdrop-blur">
+    <div className="surface rounded-3xl p-5">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Adjust</h2>
         <Button type="button" variant="ghost" size="sm" onClick={onReset}>
@@ -170,8 +175,8 @@ function ExportPanel({
   disabled: boolean;
 }) {
   return (
-    <div className="rounded-2xl border border-orange-500/20 bg-gradient-to-b from-orange-500/[0.08] to-transparent p-4">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-orange-300">
+    <div className="surface rounded-2xl p-4">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-primary">
         Export preset
       </h3>
       <label
@@ -210,14 +215,14 @@ function ExportPanel({
 function StyleBanner({ adjust }: { adjust: Adjustments }) {
   const warm = adjust.temperature >= 0;
   const gradient = warm
-    ? "linear-gradient(120deg, #1b130c 0%, #7c4a1e 45%, #f4b06a 100%)"
-    : "linear-gradient(120deg, #0b1620 0%, #1e3a5c 45%, #7fb4e8 100%)";
+    ? "linear-gradient(120deg, #fff1e0 0%, #ffd9b3 42%, #f6b26b 100%)"
+    : "linear-gradient(120deg, #e8f1ff 0%, #c9e0ff 42%, #8fb9f0 100%)";
   return (
-    <div className="relative overflow-hidden rounded-3xl border border-white/10">
+    <div className="relative overflow-hidden rounded-3xl border border-border">
       <div className="h-44" style={{ background: gradient }}>
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.25),transparent_45%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.55),transparent_45%)]" />
       </div>
-      <div className="flex items-center justify-between gap-3 bg-card/70 px-4 py-3 backdrop-blur">
+      <div className="flex items-center justify-between gap-3 bg-card/90 px-4 py-3 backdrop-blur">
         <p className="text-sm font-medium">{summarizeAdjustments(adjust)}</p>
         <span className="text-[11px] text-muted-foreground">Style preset</span>
       </div>
@@ -235,9 +240,9 @@ function FilePanel({
   onRemove: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-card/70 p-4 backdrop-blur">
+    <div className="surface rounded-2xl p-4">
       <div className="flex items-center gap-3">
-        <div className="size-12 shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/40">
+        <div className="size-12 shrink-0 overflow-hidden rounded-lg border border-border bg-secondary">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={image.previewUrl} alt="" className="size-full object-cover" />
         </div>
@@ -265,7 +270,7 @@ function FilePanel({
 
 function DetectedPanel({ stats }: { stats: ImageStats }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-card/70 p-4 backdrop-blur">
+    <div className="rounded-2xl border border-border bg-card/90 p-4 backdrop-blur">
       <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
         Detected
       </h3>
@@ -279,7 +284,7 @@ function DetectedPanel({ stats }: { stats: ImageStats }) {
         {stats.dominantColors.map((color) => (
           <span
             key={color}
-            className="size-6 rounded-md border border-white/15"
+            className="size-6 rounded-md border border-border"
             style={{ backgroundColor: color }}
             title={color}
           />
@@ -306,6 +311,10 @@ export function Studio() {
   const [error, setError] = useState<string | null>(null);
   const [styleText, setStyleText] = useState("");
   const [styleBusy, setStyleBusy] = useState(false);
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("");
+  const [provider, setProvider] = useState<"gemini" | "openai">("gemini");
+  const [engineSource, setEngineSource] = useState<"gemini" | "openai" | "engine" | null>(null);
 
   const photoReady = Boolean(image && stats && adjust);
   const nameReady = Boolean(adjust);
@@ -361,28 +370,39 @@ export function Studio() {
       setStyleBusy(true);
       try {
         let next: Adjustments;
+        let chosen: "gemini" | "openai" | "engine" = "engine";
         try {
           const response = await fetch("/api/style", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text }),
+            body: JSON.stringify({
+              text,
+              provider,
+              apiKey: apiKey.trim() || undefined,
+              model: model.trim() || undefined,
+            }),
           });
           if (!response.ok) throw new Error("Style engine unavailable");
           const data = await response.json();
           next = clampAdjustments(data.adjust ?? {});
+          chosen =
+            data.source === "ai" ? (data.provider === "openai" ? "openai" : "gemini") : "engine";
         } catch {
           next = generateStyleAdjustments(text).adjust;
+          chosen = "engine";
         }
         setAdjust(next);
         setBaseAdjust(next);
         setSourceName(text);
+        setEngineSource(chosen);
         setMode("name");
-        toast.success(`Preset dibuat: ${text}`);
+        const label = chosen === "gemini" ? "Gemini" : chosen === "openai" ? "OpenAI" : "offline";
+        toast.success(`Preset ${label} dibuat: ${text}`);
       } finally {
         setStyleBusy(false);
       }
     },
-    [styleText]
+    [styleText, apiKey, model, provider]
   );
 
   const handleDownload = useCallback(async () => {
@@ -425,10 +445,11 @@ export function Studio() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0a0a0c]/70 backdrop-blur-xl">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
+      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 backdrop-blur-xl">
+        <div className="mx-auto max-w-7xl px-4 pt-4 sm:px-6">
+          <div className="flex h-14 items-center justify-between gap-3 rounded-2xl border border-border bg-card/80 px-3 shadow-sm backdrop-blur-xl sm:px-4">
           <div className="flex items-center gap-3">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-amber-400 text-[#1c0f02]">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-[#7C3AED] text-primary-foreground">
               <Aperture className="size-5" />
             </div>
             <div>
@@ -437,7 +458,7 @@ export function Studio() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+            <div className="flex rounded-lg border border-border bg-secondary p-0.5">
               {(["photo", "name"] as const).map((item) => (
                 <button
                   key={item}
@@ -446,7 +467,7 @@ export function Studio() {
                   className={cn(
                     "rounded-md px-3 py-1 text-xs font-medium transition",
                     mode === item
-                      ? "bg-orange-500 text-[#1c0f02]"
+                      ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                 >
@@ -454,9 +475,10 @@ export function Studio() {
                 </button>
               ))}
             </div>
-            <span className="hidden rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-muted-foreground lg:block">
+            <span className="hidden rounded-full border border-border bg-secondary px-3 py-1 text-[11px] text-muted-foreground lg:block">
               On-device analysis
             </span>
+          </div>
           </div>
         </div>
       </header>
@@ -494,13 +516,13 @@ export function Studio() {
               {photoReady && image && stats && adjust ? (
                 <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
                   <div className="space-y-6">
-                    <div className="overflow-hidden rounded-3xl border border-white/10 bg-card/70 backdrop-blur">
-                      <div className="flex items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
+                    <div className="surface overflow-hidden rounded-3xl">
+                      <div className="flex items-center justify-between gap-3 border-b border-border/60 px-4 py-3">
                         <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-                          <span className="size-1.5 shrink-0 rounded-full bg-emerald-400" />
+                          <span className="size-1.5 shrink-0 rounded-full bg-emerald-500" />
                           <span className="truncate">{image.name}</span>
                         </div>
-                        <div className="flex shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+                        <div className="flex shrink-0 rounded-lg border border-border bg-secondary p-0.5">
                           {(["before", "after"] as const).map((item) => (
                             <button
                               key={item}
@@ -509,7 +531,7 @@ export function Studio() {
                               className={cn(
                                 "rounded-md px-3 py-1 text-xs font-medium capitalize transition",
                                 view === item
-                                  ? "bg-orange-500 text-[#1c0f02]"
+                                  ? "bg-primary text-primary-foreground"
                                   : "text-muted-foreground hover:text-foreground"
                               )}
                             >
@@ -527,8 +549,8 @@ export function Studio() {
                           style={{ filter: view === "after" ? afterFilter : "none" }}
                         />
                         {busy ? (
-                          <div className="absolute inset-0 grid place-items-center bg-black/40 backdrop-blur-sm">
-                            <Loader2 className="size-8 animate-spin text-orange-400" />
+                          <div className="absolute inset-0 grid place-items-center bg-white/60 backdrop-blur-sm">
+                            <Loader2 className="size-8 animate-spin text-primary" />
                           </div>
                         ) : null}
                       </div>
@@ -562,7 +584,7 @@ export function Studio() {
               ) : (
                 <section className="mx-auto max-w-3xl">
                   <div className="text-center">
-                    <span className="inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[11px] font-medium text-orange-300">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary">
                       <Sparkles className="size-3.5" /> Reads brightness &amp; color from the pixels
                     </span>
                     <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
@@ -593,8 +615,8 @@ export function Studio() {
                     className={cn(
                       "group mt-10 flex min-h-[320px] cursor-pointer flex-col items-center justify-center gap-4 rounded-3xl border border-dashed px-6 py-12 text-center transition",
                       dragging
-                        ? "border-orange-400/70 bg-orange-500/[0.08]"
-                        : "border-white/15 bg-white/[0.02] hover:border-orange-400/50 hover:bg-orange-500/[0.04]"
+                        ? "border-primary/60 bg-primary/[0.06]"
+                        : "border-border bg-secondary/50 hover:border-primary/40 hover:bg-primary/[0.04]"
                     )}
                   >
                     <motion.div
@@ -605,8 +627,8 @@ export function Studio() {
                         className={cn(
                           "flex size-16 items-center justify-center rounded-2xl transition",
                           dragging
-                            ? "bg-orange-500/20 text-orange-300"
-                            : "bg-orange-500/10 text-orange-400 group-hover:bg-orange-500/20"
+                            ? "bg-primary/10 text-primary"
+                            : "bg-primary/10 text-primary group-hover:bg-primary/10"
                         )}
                       >
                         {busy ? <Loader2 className="size-7 animate-spin" /> : <CloudUpload className="size-7" />}
@@ -618,7 +640,7 @@ export function Studio() {
                       </p>
                       <p className="mt-1 text-sm text-muted-foreground">or click to browse — JPG, PNG, WebP</p>
                     </div>
-                    {error ? <p className="text-sm text-red-400">{error}</p> : null}
+                    {error ? <p className="text-sm text-destructive">{error}</p> : null}
                   </div>
                   <button
                     type="button"
@@ -639,7 +661,7 @@ export function Studio() {
               className="mx-auto max-w-5xl"
             >
               <div className="text-center">
-                <span className="inline-flex items-center gap-2 rounded-full border border-orange-500/30 bg-orange-500/10 px-3 py-1 text-[11px] font-medium text-orange-300">
+                <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-[11px] font-medium text-primary">
                   <Sparkles className="size-3.5" /> Style engine
                 </span>
                 <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-4xl">
@@ -651,7 +673,7 @@ export function Studio() {
                 </p>
               </div>
 
-              <div className="mt-8 rounded-3xl border border-white/10 bg-card/70 p-5 backdrop-blur">
+              <div className="mt-8 surface rounded-3xl p-5">
                 <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     value={styleText}
@@ -679,14 +701,64 @@ export function Studio() {
                       key={example}
                       type="button"
                       onClick={() => handleGenerateName(example)}
-                      className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1 text-[11px] text-muted-foreground transition hover:border-orange-400/40 hover:text-foreground"
+                      className="rounded-full border border-border bg-secondary px-3 py-1 text-[11px] text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
                     >
                       {example}
                     </button>
                   ))}
                 </div>
+
+                <details className="mt-4 rounded-lg border border-border bg-secondary/50 px-3 py-2">
+                  <summary className="cursor-pointer text-[11px] font-medium text-muted-foreground">
+                    AI settings (optional)
+                  </summary>
+                  <div className="mt-2 flex gap-1 rounded-md border border-border bg-secondary p-1">
+                    {(["gemini", "openai"] as const).map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setProvider(option)}
+                        className={`flex-1 rounded px-2 py-1 text-[11px] capitalize transition ${
+                          provider === option
+                            ? "bg-primary/10 text-primary"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <Input
+                      type="password"
+                      value={apiKey}
+                      onChange={(event) => setApiKey(event.target.value)}
+                      placeholder={provider === "gemini" ? "Gemini API key" : "OpenAI API key"}
+                      autoComplete="off"
+                      className="h-9"
+                    />
+                    <Input
+                      value={model}
+                      onChange={(event) => setModel(event.target.value)}
+                      placeholder={provider === "gemini" ? "gemini-flash-lite-latest" : "gpt-4o-mini"}
+                      className="h-9"
+                    />
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Key di sini menimpa key server. Tanpa key, generator pakai style engine offline.
+                  </p>
+                </details>
               </div>
 
+              {nameReady && adjust ? (
+                <div className="mt-3 text-center text-[11px] text-muted-foreground">
+                  {engineSource === "gemini"
+                    ? "Generated with Gemini"
+                    : engineSource === "openai"
+                      ? "Generated with OpenAI"
+                      : "Generated with offline style engine"}
+                </div>
+              ) : null}
               {nameReady && adjust ? (
                 <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
                   <div className="space-y-6">
