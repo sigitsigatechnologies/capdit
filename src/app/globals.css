@@ -3,32 +3,55 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-panel: var(--panel);
-  --color-panel-raised: var(--panel-raised);
-  --color-border-subtle: var(--border-subtle);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
-  --color-accent-2: var(--accent-2);
-  --color-accent-3: var(--accent-3);
-  --radius-xl2: 1.15rem;
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
 :root {
-  --background: #0a0b0f;
-  --foreground: #f2f4f8;
-  --panel: #101219;
-  --panel-raised: #161923;
-  --border-subtle: rgba(255, 255, 255, 0.075);
-  --muted: #8b93a7;
-  --accent: #8b5cf6;
-  --accent-2: #3b82f6;
-  --accent-3: #22d3ee;
+  --background: #0a0a0c;
+  --foreground: #f4f4f5;
+  --card: #121216;
+  --card-foreground: #f4f4f5;
+  --popover: #15151a;
+  --popover-foreground: #f4f4f5;
+  --primary: #f97316;
+  --primary-foreground: #1c0f02;
+  --secondary: #1e1e24;
+  --secondary-foreground: #e4e4e7;
+  --muted: #9ca3af;
+  --muted-foreground: #a1a1aa;
+  --accent: #2a2a31;
+  --accent-foreground: #f4f4f5;
+  --destructive: #ef4444;
+  --destructive-foreground: #fafafa;
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #f97316;
+  --radius: 0.75rem;
 }
 
 * {
-  border-color: var(--border-subtle);
+  border-color: var(--border);
 }
 
 html,
@@ -38,8 +61,8 @@ body {
 
 body {
   background:
-    radial-gradient(1200px 700px at 85% -10%, rgba(59, 130, 246, 0.09), transparent 60%),
-    radial-gradient(900px 600px at 5% 0%, rgba(139, 92, 246, 0.08), transparent 55%),
+    radial-gradient(1100px 620px at 85% -10%, rgba(249, 115, 22, 0.1), transparent 60%),
+    radial-gradient(900px 620px at 5% -10%, rgba(249, 115, 22, 0.06), transparent 55%),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
@@ -48,7 +71,17 @@ body {
 }
 
 ::selection {
-  background: rgba(139, 92, 246, 0.35);
+  background: rgba(249, 115, 22, 0.35);
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+  }
 }
 
 .scrollbar-thin {
@@ -61,27 +94,23 @@ body {
 }
 .scrollbar-thin::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.12);
-  border-radius: 999px;
+  border-radius: 9999px;
 }
 .scrollbar-thin::-webkit-scrollbar-track {
   background: transparent;
 }
 
 .glass {
-  background: rgba(18, 21, 30, 0.72);
+  background: rgba(18, 18, 22, 0.72);
   backdrop-filter: blur(18px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.075);
 }
 
 .gradient-text {
-  background: linear-gradient(100deg, #c4b5fd 0%, #93c5fd 45%, #67e8f9 100%);
+  background: linear-gradient(100deg, #fdba74 0%, #f97316 45%, #fbbf24 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-}
-
-.gradient-accent {
-  background-image: linear-gradient(110deg, #7c3aed 0%, #4f46e5 50%, #0ea5e9 100%);
 }
 
 .checkerboard {
@@ -95,7 +124,7 @@ body {
 }
 
 input[type="range"] {
-  accent-color: var(--accent);
+  accent-color: var(--primary);
 }
 
 .no-drag {
@@ -128,4 +157,36 @@ input[type="range"] {
 }
 .animate-float-in {
   animation: float-in 0.35s ease-out both;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+.animate-shimmer {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+[data-radix-slider-track] {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-radix-slider-range] {
+  background: #f97316;
+}
+
+[data-radix-slider-thumb] {
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: none;
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.25);
 }

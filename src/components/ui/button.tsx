@@ -3,16 +3,16 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-45 outline-none focus-visible:ring-2 focus-visible:ring-violet-400/50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-45 outline-none focus-visible:ring-2 focus-visible:ring-orange-400/50 [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 shrink-0",
   {
     variants: {
       variant: {
-        default: "gradient-accent text-white shadow-lg shadow-violet-950/30 hover:brightness-110 active:brightness-95",
+        default: "bg-gradient-to-r from-orange-500 to-amber-400 text-[#1c0f02] font-semibold shadow-lg shadow-orange-950/30 hover:brightness-110 active:brightness-95",
         secondary: "bg-white/[0.07] text-foreground border border-white/10 hover:bg-white/[0.12]",
         ghost: "text-muted hover:text-foreground hover:bg-white/[0.07]",
         outline: "border border-white/12 bg-transparent hover:bg-white/[0.06]",
         destructive: "bg-red-500/15 text-red-300 border border-red-500/25 hover:bg-red-500/25",
-        accent: "bg-violet-500/15 text-violet-200 border border-violet-400/25 hover:bg-violet-500/25",
+        accent: "bg-orange-500/15 text-orange-200 border border-orange-400/25 hover:bg-orange-500/25",
       },
       size: {
         default: "h-9 px-4 py-2",

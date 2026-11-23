@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "sonner";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Capdit Studio — AI Photo & Video Editor",
+  title: "CAPDIT — Photo to Lightroom Preset",
   description:
-    "A local-first creative studio for editing photos and videos in your browser with real-time color grading, timeline editing, text, audio and export.",
+    "Upload a photograph, measure its brightness and color in the browser, and download a Lightroom XMP preset tuned to that photo.",
 };
 
 export default function RootLayout({
@@ -29,9 +29,9 @@ export default function RootLayout({
             closeButton
             toastOptions={{
               style: {
-                background: "#161923",
+                background: "#16161a",
                 border: "1px solid rgba(255,255,255,0.09)",
-                color: "#f2f4f8",
+                color: "#f4f4f5",
               },
             }}
           />
